@@ -21,57 +21,68 @@ class _NewItemState extends State<NewItem> {
   var _enteredName = '';
   var _enteredQuantity = 1;
   var _selectedCategory = categories[Categories.other]!;
+  var _isSending = false;
 
   void _saveItem() async {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      // NOTE: should come from env file
-      final url = Uri.https(
-        'flutter-base-1215e-default-rtdb.europe-west1.firebasedatabase.app',
-        'shopping-list.json',
-      );
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
+    if (!_formKey.currentState!.validate()) return;
+    _isSending = true;
+    _formKey.currentState!.save();
+    // NOTE: should come from env file
+    final url = Uri.https(
+      'flutter-base-1215e-default-rtdb.europe-west1.firebasedatabase.app',
+      'shopping-list.json',
+    );
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: json.encode(
+        {
+          'name': _enteredName,
+          'quantity': _enteredQuantity,
+          'category': _selectedCategory.title,
         },
-        body: json.encode(
-          {
-            'name': _enteredName,
-            'quantity': _enteredQuantity,
-            'category': _selectedCategory.title,
-          },
+      ),
+    );
+    // ignore: use_build_context_synchronously
+    if (!context.mounted) {
+      return;
+    }
+
+    final Map<String, dynamic> responseData = json.decode(response.body);
+    if (response.statusCode == 200) {
+      Navigator.of(context).pop(
+        GroceryItem(
+          id: responseData['name'],
+          name: _enteredName,
+          quantity: _enteredQuantity,
+          category: _selectedCategory,
         ),
       );
-      // ignore: use_build_context_synchronously
-      if (!context.mounted) {
-        return;
-      }
-      if (response.statusCode == 200) {
-        Navigator.of(context).pop();
-      } else {
+    } else {
+      ScaffoldMessenger.of(context).clearMaterialBanners();
+      ScaffoldMessenger.of(context).showMaterialBanner(
+        const MaterialBanner(
+          padding: EdgeInsets.all(10),
+          content: Text(
+              'There was an error while adding your item. Please try again later.'),
+          leading: Icon(Icons.error),
+          backgroundColor: Colors.red,
+          actions: [
+            // FIXME not nice workaround because actions can't be empty
+            Visibility(
+              visible: false,
+              child: Text(''),
+            )
+          ],
+        ),
+      );
+      Future.delayed(const Duration(seconds: 3), () {
         ScaffoldMessenger.of(context).clearMaterialBanners();
-        ScaffoldMessenger.of(context).showMaterialBanner(
-          const MaterialBanner(
-            padding: EdgeInsets.all(10),
-            content: Text(
-                'There was an error while adding your item. Please try again later.'),
-            leading: Icon(Icons.error),
-            backgroundColor: Colors.red,
-            actions: [
-              // FIXME not nice workaround because actions can't be empty
-              Visibility(
-                visible: false,
-                child: Text(''),
-              )
-            ],
-          ),
-        );
-        Future.delayed(const Duration(seconds: 5), () {
-          ScaffoldMessenger.of(context).clearMaterialBanners();
-        });
-      }
+      });
     }
+    _isSending = false;
   }
 
   @override
@@ -166,14 +177,22 @@ class _NewItemState extends State<NewItem> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () {
-                      _formKey.currentState!.reset();
-                    },
+                    onPressed: _isSending
+                        ? null
+                        : () {
+                            _formKey.currentState!.reset();
+                          },
                     child: const Text('Reset'),
                   ),
                   ElevatedButton(
-                    onPressed: _saveItem,
-                    child: const Text('Add Item'),
+                    onPressed: _isSending ? null : _saveItem,
+                    child: _isSending
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(),
+                          )
+                        : const Text('Add Item'),
                   ),
                 ],
               )
