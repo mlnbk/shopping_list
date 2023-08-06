@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
 import 'package:shopping_list_app/data/categories.dart';
 import 'package:shopping_list_app/models/category.dart';
 import 'package:shopping_list_app/models/grocery_item.dart';
@@ -18,17 +22,55 @@ class _NewItemState extends State<NewItem> {
   var _enteredQuantity = 1;
   var _selectedCategory = categories[Categories.other]!;
 
-  void _saveItem() {
+  void _saveItem() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      Navigator.of(context).pop(
-        GroceryItem(
-          id: DateTime.now().toString(),
-          name: _enteredName,
-          quantity: _enteredQuantity,
-          category: _selectedCategory,
+      // NOTE: should come from env file
+      final url = Uri.https(
+        'flutter-base-1215e-default-rtdb.europe-west1.firebasedatabase.app',
+        'shopping-list.json',
+      );
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(
+          {
+            'name': _enteredName,
+            'quantity': _enteredQuantity,
+            'category': _selectedCategory.title,
+          },
         ),
       );
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) {
+        return;
+      }
+      if (response.statusCode == 200) {
+        Navigator.of(context).pop();
+      } else {
+        ScaffoldMessenger.of(context).clearMaterialBanners();
+        ScaffoldMessenger.of(context).showMaterialBanner(
+          const MaterialBanner(
+            padding: EdgeInsets.all(10),
+            content: Text(
+                'There was an error while adding your item. Please try again later.'),
+            leading: Icon(Icons.error),
+            backgroundColor: Colors.red,
+            actions: [
+              // FIXME not nice workaround because actions can't be empty
+              Visibility(
+                visible: false,
+                child: Text(''),
+              )
+            ],
+          ),
+        );
+        Future.delayed(const Duration(seconds: 5), () {
+          ScaffoldMessenger.of(context).clearMaterialBanners();
+        });
+      }
     }
   }
 
