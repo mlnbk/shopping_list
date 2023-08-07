@@ -31,31 +31,43 @@ class _GroceryListState extends State<GroceryList> {
       'flutter-base-1215e-default-rtdb.europe-west1.firebasedatabase.app',
       'shopping-list.json',
     );
-    final response = await http.get(url);
-    if (response.statusCode != 200) {
+    try {
+      final response = await http.get(url);
+      if (response.statusCode != 200) {
+        setState(() {
+          _error = 'Failed to fetch data. Please try again later!';
+        });
+        return;
+      }
+      if (response.body == 'null') {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+      final Map<String, dynamic> listData = json.decode(response.body);
+      final List<GroceryItem> loadedItems = [];
+      for (final item in listData.entries) {
+        final category = categories.entries
+            .firstWhere((categoryItem) =>
+                categoryItem.value.title == item.value['category'])
+            .value;
+        loadedItems.add(GroceryItem(
+          id: item.key,
+          name: item.value['name'],
+          quantity: item.value['quantity'],
+          category: category,
+        ));
+      }
       setState(() {
-        _error = 'Failed to fetch data. Please try again later!';
+        _groceryItems = loadedItems;
+        _isLoading = false;
       });
-      return;
+    } catch (error) {
+      setState(() {
+        _error = 'Something went wrong!';
+      });
     }
-    final Map<String, dynamic> listData = json.decode(response.body);
-    final List<GroceryItem> loadedItems = [];
-    for (final item in listData.entries) {
-      final category = categories.entries
-          .firstWhere((categoryItem) =>
-              categoryItem.value.title == item.value['category'])
-          .value;
-      loadedItems.add(GroceryItem(
-        id: item.key,
-        name: item.value['name'],
-        quantity: item.value['quantity'],
-        category: category,
-      ));
-    }
-    setState(() {
-      _groceryItems = loadedItems;
-      _isLoading = false;
-    });
   }
 
   void _addItem() async {
